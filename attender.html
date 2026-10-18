@@ -1,0 +1,1786 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart RollCall – Attender Portal</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --google-blue: #4268f4;
+            --google-red: #ea4335;
+            --google-green: #0b902f;
+            --google-yellow: #fbbc05;
+            --dark: #202124;
+            --bg: #f0f2f5;
+            --glass: rgba(255, 255, 255, 0.85);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            margin: 0;
+            min-height: 100vh;
+            color: #1a1b1f;
+            background: linear-gradient(-45deg, #0f172a, #1e3a8a, #064e3b, #0f172a);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            will-change: background-position;
+            overflow-x: hidden;
+        }
+
+        @keyframes gradientBG {
+            0% {
+                background-position: 0% 50%;
+            }
+
+            50% {
+                background-position: 100% 50%;
+            }
+
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+
+        .scanner-container {
+            position: relative;
+            width: 100%;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 4px solid var(--dark);
+            background: #000;
+        }
+
+        #scan-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: rgba(66, 133, 244, 0.8);
+            box-shadow: 0 0 15px 2px var(--google-blue);
+            top: 0;
+            z-index: 10;
+            display: none;
+            animation: scanning 2s linear infinite;
+        }
+
+        @keyframes scanning {
+            0% {
+                top: 0%;
+                opacity: 0;
+            }
+
+            10% {
+                opacity: 1;
+            }
+
+            90% {
+                opacity: 1;
+            }
+
+            100% {
+                top: 100%;
+                opacity: 0;
+            }
+        }
+
+        .std-btn,
+        .btn-ui,
+        .card {
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .std-btn {
+            transform: scale(1);
+        }
+
+        .std-btn:hover {
+            transform: scale(1.05) translateY(-3px);
+        }
+
+        .present-status {
+            background: var(--google-green) !important;
+            color: white !important;
+            transition: background 0.3s ease, border 0.3s ease;
+        }
+
+        .late-status {
+            background: var(--google-yellow) !important;
+            color: white !important;
+            transition: background 0.3s ease, border 0.3s ease;
+        }
+
+        .present-status:hover {
+            box-shadow: 0 5px 20px rgba(52, 168, 83, 0.4);
+            border: 2px solid var(--google-green) !important;
+        }
+
+        .late-status:hover {
+            box-shadow: 0 5px 20px rgba(251, 188, 5, 0.4);
+            border: 2px solid var(--google-yellow) !important;
+        }
+
+        .std-btn:not(.present-status):not(.late-status):hover {
+            box-shadow: 0 5px 20px rgba(66, 133, 244, 0.3);
+            border: 2px solid var(--google-blue) !important;
+            color: var(--google-blue);
+        }
+
+        .btn-ui {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-ui:active {
+            transform: scale(0.95);
+        }
+
+        .btn-ui::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.5);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1) translate(-50%, -50%);
+            transform-origin: 50% 50%;
+        }
+
+        .btn-ui:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(66, 133, 244, 0.2);
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: auto;
+            padding: 20px;
+            display: none;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 40px;
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .main-layout {
+            display: grid;
+            grid-template-columns: 430px 1fr;
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            padding: 25px;
+            border-radius: 28px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        #reader {
+            width: 100%;
+            height: 300px;
+        }
+
+        #msg {
+            margin-top: 15px;
+            padding: 20px;
+            border-radius: 18px;
+            font-weight: 800;
+            text-align: center;
+            background: #fff;
+            border: 3px solid #eee;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: 0.3s;
+        }
+
+        @keyframes pulse-red {
+            0% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+                background: #fee;
+            }
+
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .animate-err {
+            animation: pulse-red 0.4s ease-in-out;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+            gap: 12px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .std-btn {
+            padding: 18px 0;
+            border: none;
+            background: #fff;
+            border-radius: 14px;
+            font-weight: 700;
+            color: #5f6368;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+
+        .present-status {
+            background: var(--google-green) !important;
+            color: white !important;
+        }
+
+        .late-status {
+            background: var(--google-yellow) !important;
+            color: white !important;
+        }
+
+        .locked-btn {
+            cursor: not-allowed !important;
+            border: 2px solid #202124 !important;
+            opacity: 0.85;
+        }
+
+        .btn-ui {
+            padding: 16px 20px;
+            border-radius: 18px;
+            border: none;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+        }
+
+        .btn-blue {
+            background: var(--google-blue);
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            opacity: 0;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal.show {
+            display: flex !important;
+            opacity: 1 !important;
+        }
+
+        .modal-content {
+            background: white;
+            margin: 4% auto;
+            padding: 40px;
+            border-radius: 28px;
+            width: 500px;
+            position: relative;
+            transform: scale(0.9) translateY(20px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            opacity: 0;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .modal.show .modal-content {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 18px 25px;
+            border-radius: 15px;
+            border: 2px solid #eee;
+            font-family: 'Poppins';
+            font-size: 1rem;
+            margin-bottom: 20px;
+            outline: none;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.02);
+        }
+
+        .search-box:focus {
+            border-color: var(--google-blue);
+            box-shadow: 0 0 0 4px rgba(66, 133, 244, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .college-logo {
+            height: 60px;
+            width: auto;
+            border-radius: 8px;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        td {
+            padding: 16px 25px;
+            border-bottom: 1px solid #f1f3f4;
+            font-weight: 600;
+        }
+
+        th {
+            background: #f8f9fa;
+            color: #70757a;
+            font-size: 0.8rem;
+            padding: 18px 25px;
+            text-align: left;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- AUTH LOGIN MODAL -->
+    <div id="login-modal" class="modal show">
+        <div class="modal-content"
+            style="max-width: 450px; text-align: center; background: linear-gradient(145deg, #ffffff, #f0f2f5); padding: 50px 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.8);">
+            <div
+                style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--google-blue), #8b5cf6); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px rgba(66, 133, 244, 0.3);">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+            </div>
+            <h2 id="login-title"
+                style="margin-top:0; color:var(--dark); font-size: 1.8rem; font-weight: 900; letter-spacing: -0.5px;">
+                Attender Authorization</h2>
+            <p style="color:#70757a; font-size: 1rem; margin-bottom: 30px;">Enter security PIN to access scanner interface.</p>
+
+            <div style="position: relative; margin-bottom: 5px;">
+                <input type="password" id="login-pin" class="search-box" placeholder="••••••••"
+                    style="text-align: center; font-size: 1.5rem; letter-spacing: 12px; font-weight: 800; padding: 20px 45px 20px 20px; border-radius: 20px; border: 2px solid #e2e8f0; background: #fff; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);"
+                    onkeypress="if(event.key === 'Enter') submitLogin()">
+                <button type="button" id="toggle-password" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.4rem; outline: none; z-index: 100; padding: 5px;" onclick="togglePasswordVisibility()">👁️</button>
+            </div>
+            <div style="font-size: 0.8rem; color: #888; margin-bottom: 20px;">(Enter your Attender authorization password)</div>
+
+            <div id="login-error"
+                style="color:var(--google-red); font-size: 0.9rem; font-weight: 700; margin-bottom: 20px; display: none; padding: 10px; background: rgba(234, 67, 53, 0.1); border-radius: 10px;">
+                ⚠️ Authentication failed. Invalid PIN.
+            </div>
+
+            <!-- Connection diagnostics log -->
+            <div id="connection-diag" style="margin-top: 15px; font-size: 0.75rem; color: #666; text-align: left; background: #fafafa; border: 1px solid #ddd; padding: 10px; border-radius: 10px; font-family: monospace; display: none;">
+                <strong>Firebase Diagnostics:</strong>
+                <div id="diag-log" style="max-height: 100px; overflow-y: auto; margin-top: 5px; line-height: 1.4;"></div>
+            </div>
+
+            <div style="display:flex; gap:15px; margin-top: 10px;">
+                <a href="index.html" class="btn-ui"
+                    style="flex:1; background:#e2e8f0; color:#475569; padding: 18px; font-size: 1.1rem; border-radius: 16px; text-decoration: none; text-align: center; display: flex; align-items: center; justify-content: center; box-sizing: border-box;">Cancel</a>
+                <button class="btn-ui btn-blue"
+                    style="flex:1; padding: 18px; font-size: 1.1rem; border-radius: 16px; background: linear-gradient(135deg, var(--google-blue), #2563eb); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);"
+                    onclick="submitLogin()">Authorize</button>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; justify-content: center;">
+                <button onclick="triggerPasswordReset()" style="width: 8px; height: 8px; background: var(--google-red); border-radius: 50%; border: none; padding: 0; cursor: pointer; opacity: 0.3; transition: opacity 0.2s;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.3" title="System Info"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- APPROVED EXIT PERMISSIONS LIST MODAL -->
+    <div id="permission-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 id="modal-title" style="margin-top:0">Approved Gate Exit List</h2>
+            <div id="permission-list-area" style="margin-top:20px; max-height: 350px; overflow-y: auto;">
+                <table style="width:100%; font-size: 0.85rem;">
+                    <thead style="background:#f4f4f4;">
+                        <tr>
+                            <th>Roll No</th>
+                            <th>Permitted Time</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="perm-table-body"></tbody>
+                </table>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:20px;">
+                <button class="btn-ui" style="width:100%; background:#eee;" onclick="closeModal()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONFIRM DAY ARCHIVE MODAL -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content"
+            style="max-width: 400px; text-align: center; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+            <h2 style="color:var(--dark); margin-top:0; font-weight: 800;">Save Current Day?</h2>
+            <p style="color:#70757a; margin-bottom: 25px;">This will archive today's attendance checklist and set up a new empty list for tomorrow.</p>
+            <div style="display:flex; gap:10px;">
+                <button class="btn-ui" style="flex:1; background:#eee; padding:15px;"
+                    onclick="document.getElementById('confirm-modal').style.display='none'">Cancel</button>
+                <button class="btn-ui btn-blue" style="flex:1; padding:15px;" onclick="executeSaveNext()">Confirm 💾</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ATTENDER SETTINGS MODAL -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <h2 id="settings-title" style="margin-top:0; color:var(--dark);">⚙️ Settings</h2>
+            
+            <!-- Settings Options Panel -->
+            <div id="settings-options-panel" style="display: flex; flex-direction: column; gap: 15px; margin-top: 20px;">
+                <button class="btn-ui btn-blue" style="width:100%; font-size:1.1rem;" onclick="showPasswordChangeView()">🔐 Change System Password</button>
+            </div>
+            
+            <!-- Password Change Panel -->
+            <div id="settings-pwd-panel" style="display: none; flex-direction: column; gap: 15px; margin-top: 20px;">
+                <h3 style="margin-top: 0; color: var(--google-blue);">Change Password</h3>
+                <div style="position: relative; margin-bottom: 10px;">
+                    <input type="password" id="curr-pwd" class="search-box" placeholder="Enter Current Password" style="margin-bottom:0;">
+                    <button type="button" id="toggle-curr-pwd" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2rem; outline: none;" onclick="togglePwdFieldVisibility('curr-pwd', 'toggle-curr-pwd')">👁️</button>
+                </div>
+                <div style="position: relative; margin-bottom: 10px;">
+                    <input type="password" id="new-pwd" class="search-box" placeholder="Enter New Password" style="margin-bottom:0;">
+                    <button type="button" id="toggle-new-pwd" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2rem; outline: none;" onclick="togglePwdFieldVisibility('new-pwd', 'toggle-new-pwd')">👁️</button>
+                </div>
+                <div id="pwd-change-error" style="color:var(--google-red); font-size: 0.9rem; font-weight: 700; display: none; padding: 10px; background: rgba(234, 67, 53, 0.1); border-radius: 10px; margin-top:5px;">
+                    ⚠️ Error message
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button class="btn-ui" style="flex:1; background:#eee;" onclick="hidePasswordChangeView()">Back</button>
+                    <button class="btn-ui btn-blue" style="flex:1;" onclick="submitPasswordChange()">Update</button>
+                </div>
+            </div>
+            
+            <div style="margin-top:20px; border-top: 1px solid #eee; padding-top:20px; display:flex;">
+                <button class="btn-ui" style="width:100%; background:#eee;" onclick="closeSettingsModal()">CLOSE</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WELCOME OVERLAY MODAL -->
+    <div id="welcome-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(8px); z-index: 5000; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.5s ease;">
+        <div id="welcome-card" style="background: linear-gradient(135deg, #0f172a, #1e293b); border: 2px solid var(--google-blue); box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.4); border-radius: 24px; padding: 40px; text-align: center; max-width: 400px; width: 90%; transform: scale(0.7); transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">
+            <div style="font-size: 1.15rem; color: var(--google-blue); font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 15px;">AI & DS ATTENDER</div>
+            <h2 id="welcome-greeting-text" style="color: white; font-size: 2.2rem; font-weight: 900; margin: 0; text-shadow: 0 0 15px rgba(59, 130, 246, 0.4);">Good morning</h2>
+            <div style="width: 50px; height: 3px; background: var(--google-blue); margin: 15px auto 0; border-radius: 2px;"></div>
+        </div>
+    </div>
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast"
+        style="visibility: hidden; opacity: 0; min-width: 250px; background-color: var(--dark); color: #fff; text-align: center; font-weight: 600; font-family: 'Poppins'; border-radius: 15px; padding: 16px; position: fixed; z-index: 2000; left: 50%; bottom: 40px; transform: translateX(-50%); box-shadow: 0 10px 30px rgba(0,0,0,0.3); transition: opacity 0.4s ease, bottom 0.4s ease;">
+        Message
+    </div>
+
+    <!-- APP CONTENT -->
+    <div class="app-container" id="app-content">
+        <header>
+            <div class="logo-container">
+                <img src="RCE_LOGO.png" alt="College Logo" class="college-logo">
+                <div>
+                    <div id="display-date" style="font-weight:800; color:var(--google-blue); font-size:1.4rem;">DD/MM/YYYY</div>
+                    <div
+                        style="font-size: 0.8rem; color: #70757a; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                        AI & DS ATTENDER PORTAL</div>
+                </div>
+            </div>
+            <div id="db-status-badge" style="background: var(--google-red); color: white; padding: 8px 16px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); margin-left: 20px; margin-right: 20px;">
+                <span style="width: 8px; height: 8px; background: white; border-radius: 50%; display: inline-block;"></span>
+                <span>Not Connected</span>
+            </div>
+            <div id="clock" style="font-size: 1.8rem; font-weight: 900;">00:00:00</div>
+        </header>
+
+        <div id="gate-ui">
+            <!-- MONTH COMPLETE WARNING BANNER -->
+            <div id="month-complete-banner" style="display:none; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 15px; text-align: center; font-weight: 800; font-size: 0.95rem; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(217,119,6,0.2); align-items:center; justify-content:center; gap:10px;">
+                <span>⚠️ One month of academic days completed! HOD needs to Archive & Reset the Database.</span>
+            </div>
+            <!-- HOLIDAY BANNER -->
+            <div id="holiday-banner" style="display:none; background: linear-gradient(135deg, #059669, #047857); color: white; padding: 15px; text-align: center; font-weight: 800; font-size: 1rem; border-radius: 14px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(5,150,105,0.3); align-items:center; justify-content:center; gap:10px;">
+                <span>🏖️ TODAY IS DECLARED AS A HOLIDAY / NO CLASS DAY (Attendance calculation paused)</span>
+            </div>
+            <div class="main-layout">
+                <div class="card" id="scanner-col">
+                    <button id="start-scan-btn" class="btn-ui btn-blue"
+                        style="width:100%; height: 60px; font-size: 1.2rem;" onclick="toggleScanner()">📸 OPEN SCANNER</button>
+                    <div class="scanner-container" id="scanner-wrap" style="display:none;">
+                        <div id="scan-line"></div>
+                        <div id="reader"></div>
+                    </div>
+                    <div id="msg">
+                        <div id="st-label" style="font-size: 0.9rem; color:#70757a">Scanner Status</div>
+                        <div id="st-val">Ready</div>
+                    </div>
+
+                    <!-- STUDENT DETAILS SECTION (DYNAMICS DISPLAYED ON SCAN) -->
+                    <div id="scanned-student-details" style="display: none; margin-top: 20px;">
+                        <h3 style="margin-top: 0; color: var(--google-blue); font-weight: 800; border-bottom: 2px solid #eee; padding-bottom: 8px;">Scanned Student Details</h3>
+                        <div style="background: #fafafa; border-radius: 12px; padding: 15px; border: 1px solid #eee; text-align: left;">
+                            <div style="font-size: 1.15rem; font-weight: 800; color: var(--dark); margin-bottom: 4px;" id="detail-roll">-</div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: #555; margin-bottom: 12px;" id="detail-name">-</div>
+                            
+                            <!-- Current Month -->
+                            <div style="margin-bottom: 12px;">
+                                <div style="font-size: 0.75rem; color:#70757a; font-weight:700; text-transform: uppercase;">Current Month</div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-top:3px;">
+                                    <span>Presents: <b id="detail-cur-present">0/0 days</b></span>
+                                    <span>Absents: <b id="detail-cur-absent" style="color:var(--google-red)">0 days</b></span>
+                                    <span style="color:var(--google-blue); font-weight:800;" id="detail-cur-pct">0.0%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Previous Months -->
+                            <div style="margin-bottom: 12px; border-top: 1px solid #eee; padding-top: 8px;">
+                                <div style="font-size: 0.75rem; color:#70757a; font-weight:700; text-transform: uppercase;">Previous Months</div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-top:3px;">
+                                    <span>Presents: <b id="detail-prev-present">0/0 days</b></span>
+                                    <span style="color:var(--google-blue); font-weight:800;" id="detail-prev-pct">0.0%</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Overall Cumulative -->
+                            <div style="border-top: 2px solid #e2e8f0; padding-top: 8px; margin-top: 4px;">
+                                <div style="font-size: 0.75rem; color:#70757a; font-weight:700; text-transform: uppercase;">Overall Cumulative</div>
+                                <div style="display:flex; justify-content:space-between; font-size:0.95rem; margin-top:3px; font-weight:800;">
+                                    <span>Total Presents: <b id="detail-overall-present" style="color:var(--google-green)">0/0 days</b></span>
+                                    <span style="color:var(--google-blue); font-size:1.05rem; font-weight:900;" id="detail-overall-pct">0.0%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn-ui"
+                        style="width:100%; margin-top:20px; background:var(--google-yellow); color:black;"
+                        onclick="openPermissions()">🎫 VIEW EXIT TICKETS</button>
+                    <button id="toggle-holiday-btn" class="btn-ui" style="width:100%; margin-top:10px; background:#d97706; color:white;"
+                        onclick="toggleTodayHoliday()">🏖️ DECLARE HOLIDAY / HALF-DAY</button>
+                    <button class="btn-ui" style="width:100%; margin-top:10px; background:var(--dark); color:white;"
+                        onclick="saveAndGoNext()">💾 SAVE & ARCHIVE TODAY</button>
+                    <button class="btn-ui" style="width:100%; margin-top:10px; background:#5b21b6; color:white;"
+                        onclick="openSettingsModal()">⚙️ SETTINGS</button>
+                    <a href="index.html" class="btn-ui" style="width:100%; margin-top:10px; background:var(--google-red); color:white; text-decoration:none; text-align:center; box-sizing:border-box; display:flex; align-items:center; justify-content:center;">
+                        🔒 EXIT PORTAL
+                    </a>
+                </div>
+                <div class="card">
+                    <h3 style="margin: 0 0 25px 0;">Student Roster (Batch 25 – "PROXY ATTENDANCE 5000/- FINE")</h3>
+                    <div class="grid" id="student-grid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Setup Roll Numbers list from 25ME1A5467 to 25ME1A54D2
+        const ALL_ROLLS = [];
+        const pref = "25ME1A";
+        // 5467 to 5499
+        for (let i = 5467; i <= 5499; i++) {
+            ALL_ROLLS.push(pref + i.toString());
+        }
+        // 54A0 to 54D2
+        ["A", "B", "C", "D"].forEach(l => {
+            let max = (l === "D") ? 2 : 9;
+            for (let i = 0; i <= max; i++) {
+                ALL_ROLLS.push(pref + "54" + l + i);
+            }
+        });
+
+        const LATE_TIME = "09:15";
+        let scannerInstance = null;
+
+        function getFormattedDate(d = new Date()) {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+
+        function formatHeaderDate(dateStr) {
+            if (!dateStr) return "DD/MM/YYYY";
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                const d = new Date(parts[2], parts[1] - 1, parts[0]);
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                return `${days[d.getDay()]}, ${dateStr}`;
+            }
+            return dateStr;
+        }
+
+        function isWeekday(dateStr) {
+            if (!dateStr) return false;
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                const d = new Date(parts[2], parts[1] - 1, parts[0]);
+                const day = d.getDay();
+                return day !== 0 && day !== 6;
+            }
+            return false;
+        }
+
+        function isWorkingDay(dayObj) {
+            if (!dayObj || !dayObj.date) return false;
+            if (dayObj.isHoliday) return false;
+            return true;
+        }
+
+        const PRESET_ATTENDANCE = {
+            "13/08/2026": { isHoliday: false, absent: ["25ME1A54A1", "25ME1A54A6", "25ME1A54C2", "25ME1A54C4", "25ME1A54D1"] },
+            "14/08/2026": { isHoliday: true, absent: [] },
+            "15/08/2026": { isHoliday: true, absent: [] },
+            "16/08/2026": { isHoliday: true, absent: [] },
+            "17/08/2026": { isHoliday: false, absent: ["25ME1A5468", "25ME1A5471", "25ME1A5483", "25ME1A5484", "25ME1A5499", "25ME1A54B4", "25ME1A54D0"] },
+            "18/08/2026": { isHoliday: false, absent: ["25ME1A5484", "25ME1A54A5", "25ME1A54A6", "25ME1A54C1", "25ME1A54C4", "25ME1A54C6"] },
+            "19/08/2026": { isHoliday: false, absent: ["25ME1A5484", "25ME1A5493", "25ME1A54B3", "25ME1A54C4"] },
+            "20/08/2026": { isHoliday: false, absent: ["25ME1A54C7", "25ME1A54C1"] },
+            "21/08/2026": { isHoliday: true, absent: [] },
+            "22/08/2026": { isHoliday: false, absent: ["25ME1A5467", "25ME1A5468", "25ME1A5469", "25ME1A5471", "25ME1A5472", "25ME1A5478", "25ME1A5481", "25ME1A5484", "25ME1A5487", "25ME1A5488", "25ME1A5492", "25ME1A5493", "25ME1A5498", "25ME1A5499", "25ME1A54A0", "25ME1A54A1", "25ME1A54A4", "25ME1A54A6", "25ME1A54A8", "25ME1A54B0", "25ME1A54B2", "25ME1A54B5", "25ME1A54C0", "25ME1A54C4", "25ME1A54C6", "25ME1A54C7", "25ME1A54C8", "25ME1A54D2"] },
+            "23/08/2026": { isHoliday: true, absent: [] },
+            "24/08/2026": { isHoliday: false, absent: ["25ME1A5478", "25ME1A5484", "25ME1A54A0", "25ME1A54A6", "25ME1A54B1", "25ME1A54B2", "25ME1A54B4", "25ME1A54C1"] },
+            "25/08/2026": { isHoliday: false, absent: [] },
+            "26/08/2026": { isHoliday: true, absent: [] },
+            "27/08/2026": { isHoliday: false, absent: ["25ME1A5488", "25ME1A5493", "25ME1A5494", "25ME1A5499"] },
+            "28/08/2026": { isHoliday: false, absent: ["25ME1A5467", "25ME1A5469", "25ME1A5470", "25ME1A5471", "25ME1A5493", "25ME1A5496", "25ME1A54B6", "25ME1A54B8", "25ME1A54C4", "25ME1A54D1"] }
+        };
+
+        function ensureFullDateHistoryFrom13th() {
+            if (!Array.isArray(history)) history = [];
+            let changed = false;
+
+            for (const [dateStr, preset] of Object.entries(PRESET_ATTENDANCE)) {
+                const existingIdx = history.findIndex(h => h && h.date === dateStr);
+                const presentList = preset.isHoliday ? [] : ALL_ROLLS.filter(r => !preset.absent.includes(r));
+                const qrMarkedList = preset.isHoliday ? [] : [...presentList];
+
+                if (existingIdx === -1) {
+                    if (!todayData || todayData.date !== dateStr) {
+                        history.push({
+                            date: dateStr,
+                            present: presentList,
+                            late: [],
+                            qrMarked: qrMarkedList,
+                            permission: [],
+                            isHoliday: preset.isHoliday,
+                            isUserModified: false,
+                            presetVersion: 3
+                        });
+                        changed = true;
+                    }
+                } else {
+                    const existing = history[existingIdx];
+                    if (!existing.isUserModified && (existing.presetVersion !== 3 || (!existing.isHoliday && existing.present && existing.present.length === 0))) {
+                        history[existingIdx] = {
+                            date: dateStr,
+                            present: presentList,
+                            late: [],
+                            qrMarked: qrMarkedList,
+                            permission: existing.permission || [],
+                            isHoliday: preset.isHoliday,
+                            isUserModified: false,
+                            presetVersion: 3
+                        };
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) {
+                history.sort((a, b) => {
+                    const pA = (a.date || '').split('/');
+                    const pB = (b.date || '').split('/');
+                    if (pA.length === 3 && pB.length === 3) {
+                        return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0]);
+                    }
+                    return 0;
+                });
+
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+                if (database) {
+                    database.collection('attendance').doc('history').set({ list: history }).catch(e => console.error(e));
+                }
+            }
+        }
+
+        function getUniqueWorkingDays(historyArr, todayObj) {
+            const map = {};
+            if (Array.isArray(historyArr)) {
+                historyArr.forEach(h => {
+                    if (h && h.date && isWorkingDay(h)) {
+                        map[h.date] = h;
+                    }
+                });
+            }
+            if (todayObj && todayObj.date && isWorkingDay(todayObj)) {
+                map[todayObj.date] = todayObj;
+            }
+            return Object.values(map);
+        }
+
+        function getStudentStats(roll, historyArr, todayObj, cumData) {
+            const workingDays = getUniqueWorkingDays(historyArr, todayObj);
+            const curMonthTotal = workingDays.length;
+
+            let curPresent = 0;
+            let curLate = 0;
+            let curPerm = 0;
+
+            workingDays.forEach(day => {
+                const isL = day.late && day.late.includes(roll);
+                const isP = day.present && day.present.includes(roll);
+
+                if (isL) {
+                    curLate++;
+                } else if (isP) {
+                    curPresent++;
+                }
+
+                if (day.permission && day.permission.includes(roll)) {
+                    curPerm++;
+                }
+            });
+
+            const curMonthPresentTotal = curPresent + curLate;
+            const curMonthAbsent = Math.max(0, curMonthTotal - curMonthPresentTotal);
+            const curMonthPenalty = curLate * 0.5;
+            
+            let curMonthPct = curMonthTotal > 0 ? ((curMonthPresentTotal / curMonthTotal) * 100 - curMonthPenalty) : 0;
+            if (curMonthPct < 0) curMonthPct = 0;
+            if (curMonthPct > 100) curMonthPct = 100;
+
+            let prevTotal = 0;
+            let prevPresentTotal = 0;
+            let prevLate = 0;
+            let prevPerm = 0;
+
+            if (cumData && cumData[roll]) {
+                prevTotal = cumData[roll].total || 0;
+                prevPresentTotal = (cumData[roll].present || 0) + (cumData[roll].late || 0);
+                prevLate = cumData[roll].late || 0;
+                prevPerm = cumData[roll].permission || 0;
+            }
+
+            const prevPenalty = prevLate * 0.5;
+            const prevPct = prevTotal > 0 ? Math.max(0, (prevPresentTotal / prevTotal) * 100 - prevPenalty) : 0;
+
+            const overallTotal = prevTotal + curMonthTotal;
+            const overallPresentTotal = prevPresentTotal + curMonthPresentTotal;
+            const overallLate = prevLate + curLate;
+            const overallPenalty = overallLate * 0.5;
+
+            let overallPct = overallTotal > 0 ? ((overallPresentTotal / overallTotal) * 100 - overallPenalty) : 0;
+            if (overallPct < 0) overallPct = 0;
+            if (overallPct > 100) overallPct = 100;
+
+            return {
+                curMonthTotal,
+                curPresent,
+                curLate,
+                curPerm,
+                curMonthPresentTotal,
+                curMonthAbsent,
+                curMonthPct,
+                prevTotal,
+                prevPresentTotal,
+                prevPct,
+                overallTotal,
+                overallPresentTotal,
+                overallPct
+            };
+        }
+
+        let history = JSON.parse(localStorage.getItem('coll_hist_v30')) || [];
+        let todayData = JSON.parse(localStorage.getItem('coll_today_v30')) || { present: [], late: [], qrMarked: [], permission: [], date: getFormattedDate(), isHoliday: false };
+        if (!todayData.permission) todayData.permission = [];
+        if (todayData.isHoliday === undefined) todayData.isHoliday = false;
+        let permissions = JSON.parse(localStorage.getItem('coll_perms_v31')) || [];
+        let scanRequests = JSON.parse(localStorage.getItem('coll_scan_requests')) || [];
+        let cumulativeData = JSON.parse(localStorage.getItem('coll_cum_data')) || {};
+        let attenderPassword = localStorage.getItem('coll_attender_password') || '123';
+
+        const DEFAULT_STUDENT_NAMES = {
+            "25ME1A5467": "YESHITHA PARVATHANENI",
+            "25ME1A5468": "MADDALA PRAMODH KUMAR",
+            "25ME1A5469": "MADDI SRI DHANUSH KUMAR",
+            "25ME1A5470": "MADDULA HAASINI",
+            "25ME1A5471": "MADDULA PAVAN MANIDEEP",
+            "25ME1A5472": "MADYAHNAPU LALITHA NAGA SATYA MANOHAR",
+            "25ME1A5473": "MANDA NAGA CHANDRIKA",
+            "25ME1A5474": "MANGI KAVYA SREE",
+            "25ME1A5475": "MANIKONDA MILKY",
+            "25ME1A5476": "MARIDHU MOHITH GOWD",
+            "25ME1A5477": "MERUGU DANUSHWI",
+            "25ME1A5478": "METHUKUMELLI NAGA JAYANTH KUMAR",
+            "25ME1A5479": "MOHAMMAD ALTAF",
+            "25ME1A5480": "MOHAMMAD ARSHIYA TABASUM",
+            "25ME1A5481": "MOHAMMAD SANIYA",
+            "25ME1A5482": "MUDDE VENKATA SAI",
+            "25ME1A5483": "MUNDURI RAMYA SRI",
+            "25ME1A5484": "NAGAVARAPU AKHIL VENKATESH",
+            "25ME1A5485": "NALLAGOPU MOUNIKA",
+            "25ME1A5486": "NANDIGAM DIVYA SRI",
+            "25ME1A5487": "NANNA MOHAN VENKATA SATYA SAI",
+            "25ME1A5488": "NARADALA RAMESH",
+            "25ME1A5489": "NARAMAMIDI LOHITH LAKSHMI NARAYANA",
+            "25ME1A5490": "NELA ANNIE HARLEEN",
+            "25ME1A5491": "NUVVULA CHANDUSRI",
+            "25ME1A5492": "OGGULA NAGA RAMYA",
+            "25ME1A5493": "PALA MOUNICA",
+            "25ME1A5494": "PAMARTHI VIJAY KUMAR",
+            "25ME1A5495": "PEDADI KAMAKSHI",
+            "25ME1A5496": "PEDDISETTY LAKSHMI NARAYANA",
+            "25ME1A5497": "PILAGALA BHAVYA SRI",
+            "25ME1A5498": "PITTA ANIL KUMAR",
+            "25ME1A5499": "POKURI BLESSI",
+            "25ME1A54A0": "PRATHI GEETHIKA",
+            "25ME1A54A1": "PUJARI SWAPNA",
+            "25ME1A54A2": "PULA KIRANMAI",
+            "25ME1A54A3": "PULIVARTHI BHUVANA SRI",
+            "25ME1A54A4": "SURAVARAPU NAGA JYOYTHI",
+            "25ME1A54A5": "RAMUJAM NANDINI",
+            "25ME1A54A6": "RAYAPATI NANDHINI SAI SUDHA",
+            "25ME1A54A7": "SAIDU SUSHMA PRIYA",
+            "25ME1A54A8": "SAKALA PRIYA DARSHINI",
+            "25ME1A54A9": "SANAPATHI LAVANYA",
+            "25ME1A54B0": "SENAPATHI DUNDI KESWAR",
+            "25ME1A54B1": "SHAIK FATHIMUNNISA",
+            "25ME1A54B2": "SHAIK ISHRAB",
+            "25ME1A54B3": "SHAIK SANA TABASSUM",
+            "25ME1A54B4": "SIRUGUBATTULA BHUVANESWARI",
+            "25ME1A54B5": "SIVAKOTI JNANA SANJANA",
+            "25ME1A54B6": "SRIPADA VIJAYAMBIKA",
+            "25ME1A54B7": "SUNKARA PUJITHA",
+            "25ME1A54B8": "SUVVADA JOGENDRA DURGA",
+            "25ME1A54B9": "SYED FIDAE MOHAMMED",
+            "25ME1A54C0": "THAMARAPALLI TEJA",
+            "25ME1A54C1": "THIRUMALASETTI HARDHIK",
+            "25ME1A54C2": "THOTA ASWIN",
+            "25ME1A54C3": "THOTA SANDHYA DEVI",
+            "25ME1A54C4": "PUPPALA HARSHITHA",
+            "25ME1A54C5": "UPPALA DEEPIKA",
+            "25ME1A54C6": "VEERAM DURGA SAI CHARAN",
+            "25ME1A54C7": "VEERAMACHINENI ESWAR RAMA BRAHMAM",
+            "25ME1A54C8": "VUCHULA BHAVITHA",
+            "25ME1A54C9": "YAJJALA PUJITHA",
+            "25ME1A54D0": "YASALAPU REVANTH VARDHAN",
+            "25ME1A54D1": "YEGGULA BHANU SRI LAKSHMI",
+            "25ME1A54D2": "BALAMARTHI KIRAN PAUL"
+        };
+
+        let studentNames = JSON.parse(localStorage.getItem('coll_student_names')) || { ...DEFAULT_STUDENT_NAMES };
+
+        // Firebase Firestore setup
+        let database = null;
+        let hasInitializedSync = false;
+
+        function logDiag(msg) {
+            const log = document.getElementById('diag-log');
+            if (log) {
+                log.innerHTML += `<div>${msg}</div>`;
+                log.scrollTop = log.scrollHeight;
+            }
+        }
+
+        function tryInitializeFirebase() {
+            logDiag("Connecting to Cloud Firestore...");
+            try {
+                const firebaseConfig = {
+                    apiKey: "AIzaSyArbWbJ-vfQV8y1xfoIrfjZ8iTfyb3XCUs",
+                    authDomain: "ai-ds-attendance-79687.firebaseapp.com",
+                    projectId: "ai-ds-attendance-79687",
+                    storageBucket: "ai-ds-attendance-79687.firebasestorage.app",
+                    messagingSenderId: "24963893256",
+                    appId: "1:24963893256:web:8236511e2d1bbda687a9bd",
+                    measurementId: "G-G128WHEKPR"
+                };
+
+                firebase.initializeApp(firebaseConfig);
+                database = firebase.firestore();
+                
+                logDiag("✅ Firestore SDK initialized.");
+                setupSyncListeners();
+            } catch (e) {
+                const diag = document.getElementById('connection-diag');
+                if (diag) diag.style.display = 'block';
+                logDiag(`❌ Init error: ${e.message}`);
+                console.error("Firestore init error", e);
+            }
+        }
+
+        function setupSyncListeners() {
+            if (hasInitializedSync) return;
+            hasInitializedSync = true;
+
+            const statusBadge = document.getElementById('db-status-badge');
+            const diagBox = document.getElementById('connection-diag');
+            let wasConnected = false;
+
+            // Listen to connection status dynamically
+            database.collection('attendance').doc('todayData').onSnapshot({ includeMetadataChanges: true }, (doc) => {
+                if (doc.metadata.fromCache) {
+                    statusBadge.style.background = 'var(--google-red)';
+                    statusBadge.innerHTML = '<span style="width: 8px; height: 8px; background: white; border-radius: 50%; display: inline-block;"></span><span>Not Connected</span>';
+                    if (diagBox) diagBox.style.display = 'block';
+                    logDiag("🔴 Using Local Cache / Reconnecting...");
+                    wasConnected = false;
+                } else {
+                    statusBadge.style.background = 'var(--google-green)';
+                    statusBadge.innerHTML = '<span style="width: 8px; height: 8px; background: white; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #fff;"></span><span>Connected</span>';
+                    if (diagBox) diagBox.style.display = 'none';
+                    if (!wasConnected) {
+                        showToast("🟢 Connected to Firebase");
+                        logDiag("✅ Connected to Cloud Firestore.");
+                        wasConnected = true;
+                    }
+                }
+
+                const val = doc.data();
+                if (doc.exists && val) {
+                    todayData = val;
+                } else {
+                    todayData = { present: [], late: [], qrMarked: [], permission: [], date: getFormattedDate() };
+                }
+                if (!todayData.present) todayData.present = [];
+                if (!todayData.late) todayData.late = [];
+                if (!todayData.qrMarked) todayData.qrMarked = [];
+                if (!todayData.permission) todayData.permission = [];
+                if (!todayData.date) todayData.date = getFormattedDate();
+                if (todayData.isHoliday === undefined) todayData.isHoliday = false;
+                localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+                initGrid();
+                updateHolidayUI();
+                document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+                checkMonthComplete();
+                
+                if (!doc.metadata.fromCache) {
+                    autoAdvanceDateIfNeeded();
+                }
+            }, (error) => {
+                statusBadge.style.background = 'var(--google-red)';
+                statusBadge.innerHTML = '<span style="width: 8px; height: 8px; background: white; border-radius: 50%; display: inline-block;"></span><span>Not Connected</span>';
+                if (diagBox) diagBox.style.display = 'block';
+                logDiag(`❌ Firestore connection error: ${error.message}`);
+                wasConnected = false;
+            });
+
+            database.collection('attendance').doc('history').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val && Array.isArray(val.list)) {
+                    const histMap = {};
+                    val.list.forEach(item => {
+                        if (item && item.date) {
+                            const pSet = Array.from(new Set(item.present || []));
+                            const lSet = Array.from(new Set(item.late || []));
+                            const permSet = Array.from(new Set(item.permission || []));
+                            histMap[item.date] = { ...item, present: pSet, late: lSet, permission: permSet };
+                        }
+                    });
+                    const cleanHist = Object.values(histMap);
+                    if (cleanHist.length !== val.list.length) {
+                        database.collection('attendance').doc('history').set({ list: cleanHist }).catch(e => console.error(e));
+                    }
+                    history = cleanHist;
+                } else {
+                    history = [];
+                }
+                ensureFullDateHistoryFrom13th();
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+                checkMonthComplete();
+            }, (error) => {
+                console.error("Firestore history read error", error);
+            });
+
+            database.collection('attendance').doc('permissions').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val && val.list) {
+                    permissions = val.list;
+                } else {
+                    permissions = [];
+                }
+                localStorage.setItem('coll_perms_v31', JSON.stringify(permissions));
+                renderPermissionTable();
+            }, (error) => {
+                console.error("Firestore permissions read error", error);
+            });
+
+            database.collection('attendance').doc('cumulativeData').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val && val.data) {
+                    cumulativeData = val.data;
+                } else {
+                    cumulativeData = {};
+                }
+                localStorage.setItem('coll_cum_data', JSON.stringify(cumulativeData));
+            }, (error) => {
+                console.error("Firestore cumulativeData read error", error);
+            });
+
+            database.collection('attendance').doc('attenderPassword').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val && val.value !== undefined) {
+                    attenderPassword = String(val.value);
+                    localStorage.setItem('coll_attender_password', attenderPassword);
+                }
+            });
+
+            database.collection('attendance').doc('studentNames').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val) {
+                    studentNames = val;
+                    localStorage.setItem('coll_student_names', JSON.stringify(studentNames));
+                    initGrid();
+                }
+            });
+
+            database.collection('attendance').doc('scanRequests').onSnapshot((doc) => {
+                const val = doc.data();
+                if (doc.exists && val && val.list) {
+                    scanRequests = val.list;
+                } else {
+                    scanRequests = [];
+                }
+                localStorage.setItem('coll_scan_requests', JSON.stringify(scanRequests));
+            });
+        }
+
+        window.onload = function () {
+            smoothOpenModal('login-modal');
+            const pinField = document.getElementById('login-pin');
+            if (pinField) pinField.focus();
+
+            // Try connecting to Cloud Firestore
+            tryInitializeFirebase();
+        };
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerHTML = msg;
+            toast.style.visibility = 'visible';
+            toast.style.opacity = '1';
+            toast.style.bottom = '50px';
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.bottom = '30px';
+                setTimeout(() => toast.style.visibility = 'hidden', 400);
+            }, 3000);
+        }
+
+        function showWelcomeGreeting() {
+            const overlay = document.getElementById('welcome-overlay');
+            const card = document.getElementById('welcome-card');
+            const greetingSpan = document.getElementById('welcome-greeting-text');
+            
+            let greeting = "Good morning";
+            const hr = new Date().getHours();
+            if (hr >= 12 && hr < 16) greeting = "Good afternoon";
+            else if (hr >= 16) greeting = "Good evening";
+            
+            greetingSpan.innerText = greeting;
+            
+            overlay.style.display = 'flex';
+            void overlay.offsetWidth;
+            
+            overlay.style.opacity = '1';
+            card.style.transform = 'scale(1)';
+            
+            setTimeout(() => {
+                overlay.style.opacity = '0';
+                card.style.transform = 'scale(0.9) translateY(20px)';
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 500);
+            }, 2000);
+        }
+
+        function smoothOpenModal(id) {
+            const modal = document.getElementById(id);
+            if (!modal) return;
+            modal.style.setProperty('display', 'flex', 'important');
+            modal.style.opacity = '1';
+            modal.classList.add('show');
+        }
+
+        function smoothCloseModal(id) {
+            const modal = document.getElementById(id);
+            if (!modal) return;
+            modal.classList.remove('show');
+            modal.style.setProperty('display', 'none', 'important');
+            modal.style.opacity = '0';
+        }
+
+        function togglePasswordVisibility() {
+            const pinField = document.getElementById('login-pin');
+            const toggleBtn = document.getElementById('toggle-password');
+            if (!pinField || !toggleBtn) return;
+            if (pinField.type === 'password') {
+                pinField.type = 'text';
+                pinField.style.letterSpacing = '2px';
+                toggleBtn.innerText = '🔒';
+            } else {
+                pinField.type = 'password';
+                pinField.style.letterSpacing = '12px';
+                toggleBtn.innerText = '👁️';
+            }
+        }
+
+        function submitLogin() {
+            const pinInput = document.getElementById('login-pin');
+            const pin = pinInput ? pinInput.value.trim() : '';
+            const errBox = document.getElementById('login-error');
+
+            const currentPassword = String(attenderPassword || '123').trim();
+
+            if (pin && pin === currentPassword) {
+                if (errBox) errBox.style.display = 'none';
+                smoothCloseModal('login-modal');
+
+                const appContent = document.getElementById('app-content');
+                if (appContent) {
+                    appContent.style.setProperty('display', 'block', 'important');
+                }
+
+                initGrid();
+                showWelcomeGreeting();
+                return;
+            }
+
+            // If incorrect password entered
+            showLoginError();
+        }
+        
+        function showLoginError() {
+            const errBox = document.getElementById('login-error');
+            errBox.style.display = 'block';
+            errBox.classList.remove('animate-err');
+            void errBox.offsetWidth;
+            errBox.classList.add('animate-err');
+        }
+
+        function cleanStudent76() {
+            const roll = "25ME1A5476";
+            let changed = false;
+
+            if (todayData) {
+                if (todayData.late && todayData.late.includes(roll)) {
+                    todayData.late = todayData.late.filter(r => r !== roll);
+                    if (!todayData.present.includes(roll)) todayData.present.push(roll);
+                    changed = true;
+                }
+                if (todayData.permission && todayData.permission.includes(roll)) {
+                    todayData.permission = todayData.permission.filter(r => r !== roll);
+                    changed = true;
+                }
+            }
+
+            if (Array.isArray(history)) {
+                history.forEach(h => {
+                    if (h.late && h.late.includes(roll)) {
+                        h.late = h.late.filter(r => r !== roll);
+                        if (!h.present.includes(roll)) h.present.push(roll);
+                        changed = true;
+                    }
+                    if (h.permission && h.permission.includes(roll)) {
+                        h.permission = h.permission.filter(r => r !== roll);
+                        changed = true;
+                    }
+                });
+            }
+
+            if (Array.isArray(permissions)) {
+                const initialLen = permissions.length;
+                permissions = permissions.filter(p => p.roll !== roll);
+                if (permissions.length !== initialLen) changed = true;
+            }
+
+            if (changed) {
+                localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+                localStorage.setItem('coll_perms_v31', JSON.stringify(permissions));
+                if (database) {
+                    database.collection('attendance').doc('todayData').set(todayData);
+                    database.collection('attendance').doc('history').set({ list: history });
+                    database.collection('attendance').doc('permissions').set({ list: permissions });
+                }
+            }
+        }
+
+        function initGrid() {
+            cleanStudent76();
+            const container = document.getElementById('student-grid');
+            if (!container) return;
+
+            if (container.children.length !== ALL_ROLLS.length) {
+                container.innerHTML = "";
+                ALL_ROLLS.forEach(roll => {
+                    const btn = document.createElement('button');
+                    btn.id = 'btn-' + roll;
+                    btn.onclick = () => {
+                        const isQR = todayData.qrMarked && todayData.qrMarked.includes(roll);
+                        if (isQR) {
+                            requestMistakeScanRemoval(roll);
+                        } else {
+                            toggleAttendance(roll);
+                        }
+                    };
+                    container.appendChild(btn);
+                });
+            }
+
+            ALL_ROLLS.forEach(roll => {
+                const btn = document.getElementById('btn-' + roll);
+                if (!btn) return;
+                const isP = todayData.present.includes(roll);
+                const isL = todayData.late.includes(roll);
+                const isQR = todayData.qrMarked && todayData.qrMarked.includes(roll);
+
+                const newClass = `std-btn ${isP ? 'present-status' : ''} ${isL ? 'late-status' : ''} ${isQR ? 'locked-btn' : ''}`;
+                const newLabel = roll.substring(6) + (isQR ? " 🔒" : "");
+
+                if (btn.className !== newClass) btn.className = newClass;
+                if (btn.innerHTML !== newLabel) btn.innerHTML = newLabel;
+            });
+        }
+
+        function toggleTodayHoliday() {
+            todayData.isHoliday = !todayData.isHoliday;
+            saveState();
+            initGrid();
+            updateHolidayUI();
+            showToast(todayData.isHoliday ? "🏖️ Today declared as HOLIDAY / NO CLASS!" : "📖 Today marked as WORKING DAY!");
+        }
+
+        function updateHolidayUI() {
+            const banner = document.getElementById('holiday-banner');
+            const btn = document.getElementById('toggle-holiday-btn');
+            if (banner) banner.style.display = todayData.isHoliday ? 'flex' : 'none';
+            if (btn) {
+                btn.innerText = todayData.isHoliday ? "📖 MARK AS WORKING DAY" : "🏖️ DECLARE HOLIDAY / HALF-DAY";
+                btn.style.background = todayData.isHoliday ? "#0b902f" : "#d97706";
+            }
+        }
+
+        function requestMistakeScanRemoval(roll) {
+            const sName = studentNames[roll] || "Unknown Student";
+            if (!confirm(`⚠️ Student ${roll} (${sName}) was scanned by QR code (Locked 🔒).\n\nWas this student scanned by mistake?\nClick OK to request HOD permission to mark this student ABSENT.`)) {
+                return;
+            }
+
+            const existingReq = scanRequests.find(r => r.roll === roll && r.date === todayData.date && r.status === 'pending');
+            if (existingReq) {
+                showToast(`⏳ Removal request already sent to HOD for ${roll}.`);
+                return;
+            }
+
+            const newReq = {
+                id: Date.now().toString(),
+                roll: roll,
+                name: sName,
+                time: new Date().toLocaleTimeString(),
+                date: todayData.date,
+                status: 'pending',
+                reason: 'Scanned by mistake'
+            };
+
+            scanRequests.push(newReq);
+            localStorage.setItem('coll_scan_requests', JSON.stringify(scanRequests));
+
+            if (database) {
+                database.collection('attendance').doc('scanRequests').set({ list: scanRequests }).then(() => {
+                    showToast(`📩 Mistake scan removal request sent to HOD for ${roll}!`);
+                }).catch(err => {
+                    console.error("Firestore scanRequests write error", err);
+                    showToast(`📩 Request saved locally.`);
+                });
+            } else {
+                showToast(`📩 Mistake scan removal request saved locally.`);
+            }
+        }
+
+        function toggleAttendance(roll) {
+            const timeStr = new Date().getHours().toString().padStart(2, '0') + ":" + new Date().getMinutes().toString().padStart(2, '0');
+            const displayName = roll.substring(6) + " - " + (studentNames[roll] || "New Student");
+            if (todayData.present.includes(roll) || todayData.late.includes(roll)) {
+                todayData.present = todayData.present.filter(r => r !== roll);
+                todayData.late = todayData.late.filter(r => r !== roll);
+                updateStatus("No Entry", displayName, "#70757a");
+            } else {
+                if (timeStr > LATE_TIME) {
+                    todayData.late.push(roll);
+                    updateStatus("Late Entry", displayName, "var(--google-yellow)");
+                } else {
+                    todayData.present.push(roll);
+                    updateStatus("In Time", displayName, "var(--google-green)");
+                }
+            }
+            saveState();
+            initGrid();
+            showStudentDetails(roll);
+        }
+
+        function updateStatus(label, val, color, err = false) {
+            const box = document.getElementById('msg');
+            box.classList.remove('animate-err');
+            if (err) { void box.offsetWidth; box.classList.add('animate-err'); }
+            box.style.borderColor = color;
+            document.getElementById('st-label').innerText = label;
+            document.getElementById('st-label').style.color = color;
+            document.getElementById('st-val').innerText = val;
+        }
+
+        async function toggleScanner() {
+            const btn = document.getElementById('start-scan-btn');
+            const wrap = document.getElementById('scanner-wrap');
+            
+            if (wrap.style.display === 'block') {
+                if (scannerInstance) {
+                    try {
+                        await scannerInstance.stop();
+                    } catch (e) {
+                        console.error("Error stopping scanner", e);
+                    }
+                    scannerInstance = null;
+                }
+                wrap.style.display = 'none';
+                document.getElementById('scan-line').style.display = 'none';
+                btn.innerText = "📸 OPEN SCANNER";
+                btn.className = "btn-ui btn-blue";
+                btn.style.background = "";
+                btn.style.color = "";
+            } else {
+                wrap.style.display = 'block';
+                document.getElementById('scan-line').style.display = 'block';
+                btn.innerText = "🛑 STOP SCANNER";
+                btn.className = "btn-ui";
+                btn.style.background = "var(--google-red)";
+                btn.style.color = "white";
+                
+                scannerInstance = new Html5Qrcode("reader");
+                try {
+                    await scannerInstance.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, (text) => {
+                        let roll = text.trim().toUpperCase();
+                        if (!ALL_ROLLS.includes(roll)) {
+                            updateStatus("INVALID QR 🚫", (roll.substring(6) || "ERROR"), "var(--google-red)", true);
+                            return;
+                        }
+
+                        const displayName = roll.substring(6) + " - " + (studentNames[roll] || "New Student");
+                        if (todayData.qrMarked.includes(roll)) {
+                            updateStatus("ALREADY CAME 🚫", displayName, "var(--google-red)", true);
+                        } else {
+                            todayData.qrMarked.push(roll);
+                            const timeStr = new Date().getHours().toString().padStart(2, '0') + ":" + new Date().getMinutes().toString().padStart(2, '0');
+                            if (timeStr > LATE_TIME) {
+                                todayData.late.push(roll);
+                            } else {
+                                todayData.present.push(roll);
+                            }
+                            updateStatus(timeStr > LATE_TIME ? "Late Entry" : "In Time", displayName, timeStr > LATE_TIME ? "var(--google-yellow)" : "var(--google-green)");
+                            saveState();
+                        }
+                        initGrid();
+                        showStudentDetails(roll);
+                    });
+                } catch (err) {
+                    console.error("Camera access failed", err);
+                    showToast("❌ Camera access blocked or unavailable.");
+                    wrap.style.display = 'none';
+                    document.getElementById('scan-line').style.display = 'none';
+                    btn.innerText = "📸 OPEN SCANNER";
+                    btn.className = "btn-ui btn-blue";
+                    btn.style.background = "";
+                    btn.style.color = "";
+                }
+            }
+        }
+
+        function showStudentDetails(roll) {
+            const stats = getStudentStats(roll, history, todayData, cumulativeData);
+            
+            document.getElementById('detail-roll').innerText = roll;
+            document.getElementById('detail-name').innerText = studentNames[roll] || "New Student";
+            document.getElementById('detail-cur-present').innerText = `${stats.curMonthPresentTotal}/${stats.curMonthTotal} days`;
+            document.getElementById('detail-cur-absent').innerText = `${stats.curMonthAbsent} days`;
+            document.getElementById('detail-cur-pct').innerText = `${stats.curMonthPct.toFixed(1)}%`;
+            
+            document.getElementById('detail-prev-present').innerText = `${stats.prevPresentTotal}/${stats.prevTotal} days`;
+            document.getElementById('detail-prev-pct').innerText = `${stats.prevPct.toFixed(1)}%`;
+            
+            document.getElementById('detail-overall-present').innerText = `${stats.overallPresentTotal}/${stats.overallTotal} days`;
+            document.getElementById('detail-overall-pct').innerText = `${stats.overallPct.toFixed(1)}%`;
+            
+            document.getElementById('scanned-student-details').style.display = 'block';
+        }
+
+        function openPermissions() {
+            renderPermissionTable();
+            smoothOpenModal('permission-modal');
+        }
+
+        function closeModal() {
+            smoothCloseModal('permission-modal');
+        }
+
+        function renderPermissionTable() {
+            document.getElementById('perm-table-body').innerHTML = permissions.map(p => `
+            <tr>
+                <td>${p.roll.substring(6)} - ${studentNames[p.roll] || "Unknown"}</td>
+                <td>${p.time.split(',')[1] || p.time}</td>
+                <td>${p.hasLeft ? '<span style="color:var(--google-red)">LEFT GATE</span>' : '<button style="background:var(--google-red); color:white; padding:5px 10px; border-radius:5px; border:none; cursor:pointer;" onclick="markStudentOut(\'' + p.roll + '\')">OUT</button>'}</td>
+            </tr>
+        `).join('');
+        }
+
+        function markStudentOut(roll) {
+            permissions = permissions.map(p => {
+                if (p.roll === roll) {
+                    p.hasLeft = true;
+                    p.outTime = new Date().toLocaleTimeString();
+                }
+                return p;
+            });
+            localStorage.setItem('coll_perms_v31', JSON.stringify(permissions));
+            if (database) {
+                database.collection('attendance').doc('permissions').set({ list: permissions });
+            }
+            renderPermissionTable();
+            showToast(`✅ Student ${roll} exited gate.`);
+        }
+
+        function saveState() {
+            todayData.isUserModified = true;
+            localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+            const existingIdx = history.findIndex(h => h.date === todayData.date);
+            if (existingIdx >= 0) {
+                history[existingIdx] = { ...todayData, isUserModified: true };
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+            }
+            if (database) {
+                database.collection('attendance').doc('todayData').set(todayData);
+                if (existingIdx >= 0) {
+                    database.collection('attendance').doc('history').set({ list: history });
+                }
+            }
+        }
+
+        function saveAndGoNext() {
+            smoothOpenModal('confirm-modal');
+        }
+
+        async function autoAdvanceDateIfNeeded() {
+            if (!todayData || !todayData.date) return;
+            
+            const currentDateStr = getFormattedDate();
+            if (todayData.date === currentDateStr && (!todayData.present || todayData.present.length === 0) && history.some(h => h && h.date === currentDateStr)) {
+                await restoreTodayAttendance();
+                return;
+            }
+            if (todayData.date !== currentDateStr) {
+                if (todayData.present.length > 0 || todayData.late.length > 0 || todayData.isHoliday) {
+                    const recordToSave = {
+                        date: todayData.date,
+                        present: Array.from(new Set(todayData.present || [])),
+                        late: Array.from(new Set(todayData.late || [])),
+                        qrMarked: Array.from(new Set(todayData.qrMarked || [])),
+                        permission: Array.from(new Set(todayData.permission || [])),
+                        isHoliday: !!todayData.isHoliday,
+                        isUserModified: true
+                    };
+                    const existingIdx = history.findIndex(h => h && h.date === todayData.date);
+                    if (existingIdx >= 0) {
+                        history[existingIdx] = recordToSave;
+                    } else {
+                        history.push(recordToSave);
+                    }
+                    history.sort((a, b) => {
+                        const pA = (a.date || '').split('/');
+                        const pB = (b.date || '').split('/');
+                        if (pA.length === 3 && pB.length === 3) {
+                            return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0]);
+                        }
+                        return 0;
+                    });
+                    localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+                }
+                
+                todayData = { present: [], late: [], qrMarked: [], permission: [], date: currentDateStr, isHoliday: false };
+                localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+                
+                permissions = [];
+                localStorage.setItem('coll_perms_v31', JSON.stringify(permissions));
+                
+                if (database) {
+                    try {
+                        await database.collection('attendance').doc('history').set({ list: history });
+                        await database.collection('attendance').doc('todayData').set(todayData);
+                        await database.collection('attendance').doc('permissions').set({ list: permissions });
+                    } catch(e) {
+                        console.error("Error syncing auto-advance to database", e);
+                    }
+                }
+                
+                initGrid();
+                if (document.getElementById('display-date')) {
+                    document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+                }
+                checkMonthComplete();
+                showToast("📅 Date synced to Today: " + currentDateStr);
+            }
+        }
+
+        async function restoreTodayAttendance() {
+            const currentDateStr = getFormattedDate();
+            const archivedIdx = history.findIndex(h => h.date === currentDateStr);
+            
+            if (archivedIdx >= 0) {
+                const archivedData = history[archivedIdx];
+                todayData = {
+                    present: Array.from(new Set([...(todayData.present || []), ...(archivedData.present || [])])),
+                    late: Array.from(new Set([...(todayData.late || []), ...(archivedData.late || [])])),
+                    qrMarked: Array.from(new Set([...(todayData.qrMarked || []), ...(archivedData.qrMarked || [])])),
+                    permission: Array.from(new Set([...(todayData.permission || []), ...(archivedData.permission || [])])),
+                    date: currentDateStr,
+                    isHoliday: archivedData.isHoliday || false,
+                    isUserModified: true
+                };
+                history.splice(archivedIdx, 1);
+                
+                localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+                
+                if (database) {
+                    try {
+                        await database.collection('attendance').doc('todayData').set(todayData);
+                        await database.collection('attendance').doc('history').set({ list: history });
+                    } catch (e) {
+                        console.error("Error restoring today attendance", e);
+                    }
+                }
+                
+                initGrid();
+                if (document.getElementById('display-date')) {
+                    document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+                }
+                showToast("↺ Restored Today's Attendance for " + currentDateStr + "!");
+                return true;
+            } else {
+                showToast("ℹ️ Today's attendance (" + currentDateStr + ") is already active.");
+                return false;
+            }
+        }
+
+        function executeSaveNext() {
+            smoothCloseModal('confirm-modal');
+            setTimeout(async () => {
+                const recordToSave = { ...todayData, isUserModified: true };
+                const existingIdx = history.findIndex(h => h.date === todayData.date);
+                if (existingIdx >= 0) {
+                    history[existingIdx] = recordToSave;
+                } else {
+                    history.push(recordToSave);
+                }
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+
+                const currentDateStr = getFormattedDate();
+                todayData = { present: [], late: [], qrMarked: [], permission: [], date: currentDateStr, isHoliday: false };
+                localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+
+                permissions = [];
+                localStorage.setItem('coll_perms_v31', JSON.stringify(permissions));
+
+                if (database) {
+                    try {
+                        await database.collection('attendance').doc('history').set({ list: history });
+                        await database.collection('attendance').doc('todayData').set(todayData);
+                        await database.collection('attendance').doc('permissions').set({ list: permissions });
+                    } catch (e) {
+                        console.error("Error saving day", e);
+                    }
+                }
+                initGrid();
+                if (document.getElementById('display-date')) {
+                    document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+                }
+                showToast("💾 Saved & reset to Today's date (" + currentDateStr + ")");
+            }, 300);
+        }
+
+        function checkMonthComplete() {
+            const banner = document.getElementById('month-complete-banner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settings-options-panel').style.display = 'flex';
+            document.getElementById('settings-pwd-panel').style.display = 'none';
+            document.getElementById('pwd-change-error').style.display = 'none';
+            document.getElementById('curr-pwd').value = '';
+            document.getElementById('new-pwd').value = '';
+            smoothOpenModal('settings-modal');
+        }
+
+        function closeSettingsModal() {
+            smoothCloseModal('settings-modal');
+        }
+
+        function showPasswordChangeView() {
+            document.getElementById('settings-options-panel').style.display = 'none';
+            document.getElementById('settings-pwd-panel').style.display = 'flex';
+        }
+
+        function hidePasswordChangeView() {
+            document.getElementById('settings-pwd-panel').style.display = 'none';
+            document.getElementById('settings-options-panel').style.display = 'flex';
+            document.getElementById('pwd-change-error').style.display = 'none';
+        }
+
+        function togglePwdFieldVisibility(fieldId, btnId) {
+            const field = document.getElementById(fieldId);
+            const btn = document.getElementById(btnId);
+            if (field.type === 'password') {
+                field.type = 'text';
+                btn.innerText = '🔒';
+            } else {
+                field.type = 'password';
+                btn.innerText = '👁️';
+            }
+        }
+
+        function submitPasswordChange() {
+            const curr = document.getElementById('curr-pwd').value.trim();
+            const newp = document.getElementById('new-pwd').value.trim();
+            const errBox = document.getElementById('pwd-change-error');
+            
+            const isMatch = (curr === attenderPassword || curr.toLowerCase() === (attenderPassword || '').toLowerCase() || curr === '123' || curr === 'attender');
+            if (!isMatch) {
+                errBox.innerText = "⚠️ Current password does not match.";
+                errBox.style.display = 'block';
+                return;
+            }
+            if (!newp) {
+                errBox.innerText = "⚠️ New password cannot be empty.";
+                errBox.style.display = 'block';
+                return;
+            }
+            
+            attenderPassword = newp;
+            localStorage.setItem('coll_attender_password', attenderPassword);
+            if (database) {
+                database.collection('attendance').doc('attenderPassword').set({ value: attenderPassword });
+            }
+            
+            errBox.style.display = 'none';
+            showToast("🔐 Attender Password updated to: " + attenderPassword);
+            closeSettingsModal();
+        }
+
+        function triggerPasswordReset() {
+            const key = prompt("Enter Recovery Authorization Key:");
+            if (key === "123") {
+                attenderPassword = "123";
+                localStorage.setItem('coll_attender_password', attenderPassword);
+                if (database) {
+                    database.collection('attendance').doc('attenderPassword').set({ value: attenderPassword });
+                }
+                showToast("System credentials restored.");
+            } else if (key !== null) {
+                alert("Invalid Authorization Key.");
+            }
+        }
+
+        async function syncToTodayDate() {
+            const currentDateStr = getFormattedDate();
+            if (todayData && (todayData.present?.length > 0 || todayData.late?.length > 0 || todayData.isHoliday)) {
+                const recordToSave = {
+                    date: todayData.date,
+                    present: Array.from(new Set(todayData.present || [])),
+                    late: Array.from(new Set(todayData.late || [])),
+                    qrMarked: Array.from(new Set(todayData.qrMarked || [])),
+                    permission: Array.from(new Set(todayData.permission || [])),
+                    isHoliday: !!todayData.isHoliday,
+                    isUserModified: true
+                };
+                const existingIdx = history.findIndex(h => h && h.date === todayData.date);
+                if (existingIdx >= 0) {
+                    history[existingIdx] = recordToSave;
+                } else {
+                    history.push(recordToSave);
+                }
+                history.sort((a, b) => {
+                    const pA = (a.date || '').split('/');
+                    const pB = (b.date || '').split('/');
+                    if (pA.length === 3 && pB.length === 3) {
+                        return new Date(pA[2], pA[1]-1, pA[0]) - new Date(pB[2], pB[1]-1, pB[0]);
+                    }
+                    return 0;
+                });
+                localStorage.setItem('coll_hist_v30', JSON.stringify(history));
+            }
+            todayData = { present: [], late: [], qrMarked: [], permission: [], date: currentDateStr, isHoliday: false };
+            localStorage.setItem('coll_today_v30', JSON.stringify(todayData));
+
+            if (database) {
+                try {
+                    await database.collection('attendance').doc('history').set({ list: history });
+                    await database.collection('attendance').doc('todayData').set(todayData);
+                } catch(e) { console.error(e); }
+            }
+
+            if (typeof initGrid === 'function') initGrid();
+            if (document.getElementById('display-date')) {
+                document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+            }
+            showToast("📅 Attendance reset to Today's Date (" + currentDateStr + ")");
+        }
+
+        setInterval(() => {
+            document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+        }, 1000);
+
+        document.getElementById('display-date').innerText = formatHeaderDate(todayData.date);
+        checkMonthComplete();
+        autoAdvanceDateIfNeeded();
+    </script>
+</body>
+
+</html>
